@@ -1,14 +1,16 @@
-FROM ubuntu:latest
+FROM ubuntu:20.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Create a non-root user
+RUN useradd --uid 1001 --create-home docker
+# install sudo and add docker to sudoers
+RUN apt-get update && \
+    apt-get install -y sudo
+RUN echo "docker ALL=(ALL) NOPASSWD: ALL" | tee -a /etc/sudoers
+
 RUN mkdir /opt/workspace
 WORKDIR /opt/workspace
-COPY cmd.sh /opt/
-
-COPY dummy-esp8266 /opt/dummy-esp8266
-COPY dummy-esp32 /opt/dummy-esp32
-COPY dummy-esp32-idf /opt/dummy-esp32-idf
 
 RUN apt-get update -qq && \
 apt-get install -y -qq software-properties-common && \
@@ -16,19 +18,14 @@ apt-add-repository universe && \
 apt-get update -qq && \
 apt-get install -qq -y --no-install-recommends \
 bc \
-bison \
 build-essential \
 curl \
-flex \
 gcc \
 git \
 gperf \
-jq \
-libncurses-dev \
 make \
 python3-dev \
 python3-pip \
-srecord \
 unzip \
 wget \
 xz-utils
@@ -51,34 +48,28 @@ RUN pio platform install espressif8266 \
 
 # https://docs.espressif.com/projects/esp-idf/en/latest/esp32/get-started-legacy/linux-setup.html
 
-RUN mkdir -p /root/esp \
- && cd /root/esp \
+RUN mkdir -p /home/docker/esp \
+ && cd /home/docker/esp \
  && wget https://dl.espressif.com/dl/xtensa-esp32-elf-gcc8_4_0-esp-2020r3-linux-amd64.tar.gz \
  && tar -xzf ./xtensa-*.tar.gz \
- && echo "export PATH=$PATH:/root/esp/xtensa-esp32-elf/bin" > .profile \
- && echo "export IDF_PATH=/root/esp/esp-idf" > .profile \
+ && echo "export PATH=$PATH:/home/docker/esp/xtensa-esp32-elf/bin" > .profile \
+ && echo "export IDF_PATH=/home/docker/esp/esp-idf" > .profile \
  && git clone https://github.com/espressif/esp-idf.git --recurse-submodules
 
 # Build tests
 
-RUN export PATH=$PATH:/root/esp/xtensa-esp32-elf/bin \
- && export IDF_PATH=/root/esp/esp-idf \
- && python3 -m pip install --user -r /root/esp/esp-idf/requirements.txt
+RUN export PATH=$PATH:/home/docker/esp/xtensa-esp32-elf/bin \
+ && export IDF_PATH=/home/docker/esp/esp-idf \
+ && python3 -m pip install --user -r /home/docker/esp/esp-idf/requirements.txt
 
-RUN export PATH=$PATH:/root/esp/xtensa-esp32-elf/bin \
- && export IDF_PATH=/root/esp/esp-idf \
- && cd /root/esp/esp-idf/examples/get-started/hello_world \
- && cp -v /opt/dummy-esp32-idf/sdkconfig . \
+RUN export PATH=$PATH:/home/docker/esp/xtensa-esp32-elf/bin \
+ && export IDF_PATH=/home/docker/esp/esp-idf \
+ && cd /home/docker/esp/esp-idf/examples/get-started/hello_world \
  && ls -la \
  && ln -s $(which python3) /usr/bin/python \
  && make
 
-WORKDIR /opt/dummy-esp32
-RUN pio --version && pio run
-
-WORKDIR /opt/dummy-esp8266
-RUN pio --version && pio run
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-CMD /opt/cmd.sh
+CMD /bin/bash
